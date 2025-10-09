@@ -1,0 +1,48 @@
+"""MongoDB client connection management."""
+import logging
+from typing import Optional
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+
+from mcp_composer.config import MongoConfig
+
+logger = logging.getLogger(__name__)
+
+
+class MongoDBClient:
+    """MongoDB client for database connection management."""
+
+    def __init__(self, mongo_config: MongoConfig):
+        """
+        Initialize MongoDB client with configuration.
+
+        Args:
+            mongo_config: MongoDB configuration
+        """
+        self.config = mongo_config
+        self.client: Optional[AsyncIOMotorClient] = None
+        self.db: Optional[AsyncIOMotorDatabase] = None
+
+    async def connect(self):
+        """Establish connection to MongoDB."""
+        try:
+            self.client = AsyncIOMotorClient(self.config.connection_string)
+            self.db = self.client[self.config.database_name]
+            # Test connection
+            await self.client.admin.command('ping')
+            logger.info(f"Connected to MongoDB: {self.config.database_name}")
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {e}")
+            raise
+
+    async def close(self):
+        """Close MongoDB connection."""
+        if self.client:
+            self.client.close()
+            logger.info("MongoDB connection closed")
+
+    def get_collection(self, collection_name: str):
+        """Get a MongoDB collection by name."""
+        if self.db is None:
+            raise RuntimeError("MongoDB client not connected. Call connect() first.")
+        return self.db[collection_name]

@@ -1,40 +1,29 @@
+"""Repository pattern for user MCP configurations."""
 import logging
 from typing import Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient
-
-from .config import config
-from .models import UserMCPConfig
+from mcp_composer.models import UserMCPConfig
 
 logger = logging.getLogger(__name__)
 
 
-class MongoDBClient:
-    """MongoDB client for MCP configuration storage."""
+class UserConfigRepository:
+    """Repository for managing user MCP configurations in MongoDB."""
 
-    def __init__(self):
-        self.client: Optional[AsyncIOMotorClient] = None
-        self.db = None
-        self.collection = None
+    def __init__(self, db_client, collection_name: str = "mcp_configs"):
+        """
+        Initialize repository with database client.
 
-    async def connect(self):
-        """Establish connection to MongoDB."""
-        try:
-            self.client = AsyncIOMotorClient(config.mongodb_uri)
-            self.db = self.client[config.mongodb_database]
-            self.collection = self.db[config.mongodb_collection]
-            # Test connection
-            await self.client.admin.command('ping')
-            logger.info(f"Connected to MongoDB: {config.mongodb_database}.{config.mongodb_collection}")
-        except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
-            raise
+        Args:
+            db_client: MongoDBClient instance
+            collection_name: Name of the MongoDB collection
+        """
+        self.db_client = db_client
+        self.collection_name = collection_name
 
-    async def close(self):
-        """Close MongoDB connection."""
-        if self.client:
-            self.client.close()
-            logger.info("MongoDB connection closed")
+    def _get_collection(self):
+        """Get the user configs collection."""
+        return self.db_client.get_collection(self.collection_name)
 
     async def get_user_config(self, email: str) -> Optional[UserMCPConfig]:
         """
@@ -47,7 +36,8 @@ class MongoDBClient:
             UserMCPConfig object or None if not found
         """
         try:
-            document = await self.collection.find_one({"_id": email})
+            collection = self._get_collection()
+            document = await collection.find_one({"_id": email})
             if document:
                 return UserMCPConfig.from_document(document)
             logger.warning(f"No configuration found for user: {email}")
@@ -65,7 +55,8 @@ class MongoDBClient:
         """
         try:
             configs: list[UserMCPConfig] = []
-            cursor = self.collection.find({})
+            collection = self._get_collection()
+            cursor = collection.find({})
             async for document in cursor:
                 try:
                     config = UserMCPConfig.from_document(document)
@@ -87,8 +78,9 @@ class MongoDBClient:
             user_config: UserMCPConfig object
         """
         try:
+            collection = self._get_collection()
             document = user_config.to_document()
-            await self.collection.update_one(
+            await collection.update_one(
                 {"_id": document["_id"]},
                 {"$set": {"mcpServers": document["mcpServers"]}},
                 upsert=True
@@ -97,7 +89,3 @@ class MongoDBClient:
         except Exception as e:
             logger.error(f"Error setting config for {user_config.email}: {e}")
             raise
-
-
-# Global MongoDB client instance
-mongodb_client = MongoDBClient()
