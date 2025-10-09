@@ -5,16 +5,15 @@ A multi-tenant MCP (Model Context Protocol) server that aggregates and manages m
 
 ## Overview
 
-MCP Composer acts as a centralized proxy that allows multiple users to configure and access their own MCP servers through a single endpoint. Each user authenticates via Google OAuth and only sees their own configured tools and resources, making it ideal for team environments or shared Claude.AI deployments.
+MCP Composer acts as a centralized proxy that allows multiple users to configure and access their own MCP servers through a single endpoint. Each user authenticates via Google OAuth and only sees their own configured tools and resources.
 
 ## Key Features
 
-- **Multi-tenant Architecture**: Each user maintains their own isolated MCP server configurations
-- **Google OAuth Authentication**: Secure authentication flow integrated with Claude.AI
+- **Multi-tenant Architecture**: Each user has their own isolated MCP server configurations
+- **Google OAuth Authentication**: OAuth 2.1 flow integrated with Claude.AI
 - **Flexible Server Support**: Compatible with both HTTP and stdio-based MCP servers
-- **MongoDB Storage**: User configurations and OAuth tokens persisted in MongoDB
-- **Tool Isolation**: Security middleware ensures users only access their own tools
-- **Docker Ready**: Containerized deployment with docker-compose
+- **MongoDB**: User configurations and OAuth tokens are stored in MongoDB
+- **MCP Isolation**: Security middleware makes sure that users can access only their own MCPs
 
 ## Use Cases
 
@@ -78,10 +77,6 @@ uv run mcp-composer
 
 The server will start on `http://localhost:8000`.
 
-### Docker Deployment
-
-For production deployment with Docker Compose, see the `swarm` directory configuration.
-
 ## Configuration
 
 ### User MCP Server Configuration
@@ -128,16 +123,6 @@ Optional:
 4. Now you should be able to see your configured tools
 
 Each user's tools are isolated and only visible to them after authentication.
-
-## Development
-
-### Project Structure
-
-The codebase uses:
-- **Dependency Injection**: All components receive dependencies via constructors
-- **Repository Pattern**: Clean separation of data access logic
-- **Async/Await**: Fully asynchronous for MongoDB and MCP operations
-- **Pydantic**: Type-safe configuration and data models
 
 ## Security Considerations
 
