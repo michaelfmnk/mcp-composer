@@ -79,5 +79,4 @@ class Config(BaseSettings):
         return MongoConfig(
             uri=self.mongodb_uri,
             database=self.mongodb_database,
-            collection=self.mongodb_collection
         )
