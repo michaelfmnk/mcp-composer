@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Set working directory
 WORKDIR /app
@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
-# Verify Node.js installation
+
+# Verify Node.js installation (for JS MCPs)
 RUN node --version && npm --version && npx --version
 
 # Install uv for faster dependency management
@@ -24,12 +25,6 @@ COPY src ./src
 
 # Install dependencies using uv
 RUN uv sync --frozen
-
-# Expose port
-EXPOSE 8000
-
-# Set environment variable for port
-ENV FMCP_PORT=8000
 
 # Run the application
 CMD ["uv", "run", "mcp-composer"]
