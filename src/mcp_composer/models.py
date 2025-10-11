@@ -1,4 +1,7 @@
+from enum import Enum
 from typing import Any
+
+from mcp.server.auth.provider import AccessToken, RefreshToken
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 
@@ -33,6 +36,38 @@ class MCPServersConfig(BaseModel):
             name: server.model_dump(exclude_none=True)
             for name, server in self.servers.items()
         }
+
+class TokenType(Enum):
+    ACCESS = "ACCESS"
+    REFRESH = "REFRESH"
+
+class OAuthToken(BaseModel):
+    """OAuth token structure."""
+    model_config = ConfigDict(extra='forbid')
+
+    token: str = Field(alias="_id")
+    type: TokenType = Field(alias="type")
+    access_token: AccessToken | None = Field(alias="accessToken")
+    refresh_token: RefreshToken | None = Field(alias="refreshToken")
+
+    def to_document(self) -> dict[str, Any]:
+        """Convert to MongoDB document format."""
+        return {
+            "_id": self.token,
+            "type": self.type.value,
+            "accessToken": self.access_token.model_dump() if self.access_token else None,
+            "refreshToken": self.refresh_token.model_dump() if self.refresh_token else None
+        }
+
+    @staticmethod
+    def from_document(document: dict) -> "OAuthToken":
+        """Create from MongoDB document."""
+        return OAuthToken(
+            _id=document["_id"],
+            type=TokenType(document["type"]),
+            accessToken=AccessToken(**document["accessToken"]) if document.get("accessToken") else None,
+            refreshToken=RefreshToken(**document["refreshToken"]) if document.get("refreshToken") else None
+        )
 
 
 class UserMCPConfig(BaseModel):
