@@ -27,4 +27,5 @@ COPY src ./src
 RUN uv sync --frozen
 
 # Run the application
-CMD ["uv", "run", "mcp-composer"]
+# Use exec form to ensure signals are properly forwarded
+CMD ["uv", "run", "--", "mcp-composer"]

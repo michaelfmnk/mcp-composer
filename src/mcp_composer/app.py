@@ -48,16 +48,9 @@ class McpComposerApp:
         await self.db_client.connect()
         logger.info("MCP Composer initialized successfully")
 
-    async def run(self) -> None:
-        """Run the application."""
-        try:
-            await self.initialize()
-            await self.server_manager.start_mcp()
-        except Exception as e:
-            logger.error(f"Application error: {e}")
-            raise
-        finally:
-            await self.shutdown()
+    async def start(self) -> None:
+        """Start the MCP server."""
+        await self.server_manager.start_mcp()
 
     async def shutdown(self) -> None:
         """Shutdown the application and cleanup resources."""
