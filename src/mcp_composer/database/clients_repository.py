@@ -8,15 +8,15 @@ logger = logging.getLogger(__name__)
 class ClientsRepository:
     """Repository for managing OAuth client data in MongoDB."""
 
-    def __init__(self, db_client, collection_name: str = "clients"):
+    def __init__(self, db, collection_name: str = "clients"):
         """
         Initialize clients repository with database client.
 
         Args:
-            db_client: MongoDBClient instance
+            db: MongoDBClient instance
             collection_name: Name of the MongoDB collection for client data
         """
-        self.db_client = db_client
+        self.db_client = db
         self.collection_name = collection_name
 
     def _get_collection(self):

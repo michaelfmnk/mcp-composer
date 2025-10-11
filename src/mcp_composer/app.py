@@ -5,6 +5,7 @@ from mcp_composer.config import Config
 from mcp_composer.database.client import MongoDBClient
 from mcp_composer.database.repository import UserConfigRepository
 from mcp_composer.database.clients_repository import ClientsRepository
+from mcp_composer.database.tokens_repository import TokensRepository
 from mcp_composer.server.manager import MCPServerManager
 
 logger = logging.getLogger(__name__)
@@ -31,12 +32,14 @@ class McpComposerApp:
         self.db_client = MongoDBClient(config.mongo)
         self.user_config_repository = UserConfigRepository(self.db_client)
         self.clients_repository = ClientsRepository(self.db_client)
+        self.tokens_repository = TokensRepository(self.db_client)
 
         # Initialize server components
         self.server_manager = MCPServerManager(
             config=self.config,
             clients_repository=self.clients_repository,
-            user_config_repository=self.user_config_repository
+            user_config_repository=self.user_config_repository,
+            tokens_repository=self.tokens_repository
         )
 
     async def initialize(self) -> None:
@@ -45,19 +48,13 @@ class McpComposerApp:
         await self.db_client.connect()
         logger.info("MCP Composer initialized successfully")
 
-    async def run(self) -> None:
-        """Run the application."""
-        try:
-            await self.initialize()
-            await self.server_manager.start_mcp()
-        except Exception as e:
-            logger.error(f"Application error: {e}")
-            raise
-        finally:
-            await self.shutdown()
+    async def start(self) -> None:
+        """Start the MCP server."""
+        await self.server_manager.start_mcp()
 
     async def shutdown(self) -> None:
         """Shutdown the application and cleanup resources."""
         logger.info("Shutting down MCP Composer...")
+        await self.server_manager.dump_auth_state()
         await self.db_client.close()
         logger.info("MCP Composer shutdown complete")
