@@ -17,13 +17,15 @@ def create_google_auth_provider(config: Config, clients_repository) -> GooglePro
         Configured GoogleProvider instance
     """
     google_config = config.google
-    return GoogleProvider(
+    provider = GoogleProvider(
         client_id=google_config.client_id,
         client_secret=google_config.client_secret,
         base_url=config.base_url,
-        required_scopes=[
-            "openid",
-            "https://www.googleapis.com/auth/userinfo.email",
-        ],
+        required_scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", ],
         client_storage=MongoClientStorage(clients_repository)
     )
+    provider._extra_authorize_params = {
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    return provider
