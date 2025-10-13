@@ -1,6 +1,13 @@
 """Application configuration management."""
+from enum import Enum
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class MountMode(str, Enum):
+    """Downstream MCP server mount mode."""
+    LIVE = "live"
+    STATIC = "static"
 
 
 class MongoConfig(BaseSettings):
@@ -55,6 +62,13 @@ class Config(BaseSettings):
     # MongoDB configuration
     mongodb_uri: str = Field(alias="MONGODB_URI")
     mongodb_database: str = Field(default="mcp_composer", alias="MONGODB_DATABASE")
+
+    # MCP composition mode
+    mcp_composition_mode: MountMode = Field(
+        default=MountMode.LIVE,
+        alias="MCP_COMPOSITION_MODE",
+        description="Composition mode for downstream MCP servers: 'live' uses mcp.mount(), 'static' uses mcp.import_server()"
+    )
 
     @property
     def google(self) -> GoogleOAuthConfig:

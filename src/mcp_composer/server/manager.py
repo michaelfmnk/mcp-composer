@@ -6,6 +6,7 @@ from fastmcp.prompts import Prompt
 
 from mcp_composer.auth.middleware import SecurityFilterMiddleware
 from mcp_composer.auth.providers import create_google_auth_provider
+from mcp_composer.config import MountMode
 from mcp_composer.server import CustomProxyClient
 
 logger = logging.getLogger(__name__)
@@ -80,9 +81,17 @@ class MCPServerManager:
                 await client.__aenter__()
                 proxy = FastMCP.as_proxy(client)
                 self._attach_prompts_to_proxy(proxy, user_config)
-                mcp.mount(proxy)
 
-                logger.info(f"Imported servers for {user_config.email}")
+                # Mount or import based on configuration
+                mount_mode = self.config.mcp_composition_mode
+                if mount_mode == MountMode.LIVE:
+                    mcp.mount(proxy)
+                    logger.info(f"Mounted (live) servers for {user_config.email}")
+                elif mount_mode == MountMode.STATIC:
+                    await mcp.import_server(proxy)
+                    logger.info(f"Imported (static) servers for {user_config.email}")
+                else:
+                    raise ValueError(f"Unsupported mount mode: {mount_mode}")
             except Exception as e:
                 logger.error(f"Failed to import servers for {user_config.email}: {e}")
 
