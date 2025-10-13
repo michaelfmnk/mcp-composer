@@ -5,6 +5,7 @@ from fastmcp import FastMCP
 
 from mcp_composer.auth.middleware import SecurityFilterMiddleware
 from mcp_composer.auth.providers import create_google_auth_provider
+from mcp_composer.config import MountMode
 from mcp_composer.server import CustomProxyClient
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,28 @@ class MCPServerManager:
         mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
         return mcp
 
+    def _attach_prompts_to_proxy(self, proxy: FastMCP, user_config) -> None:
+        """
+        Attach prompts from user configuration to a proxy.
+
+        Args:
+            proxy: FastMCP proxy instance to attach prompts to
+            user_config: UserMCPConfig containing prompt configurations
+        """
+        # Add default owner prompt
+        proxy.add_prompt(Prompt.from_function(
+            lambda: f"This is a tool owned by {user_config.email}.",
+            name="/owner",
+            description="Indicates the owner of this tool."
+        ))
+
+        # Add custom prompts from config
+        if user_config.prompts:
+            for prompt_config in user_config.prompts:
+                if prompt_config.enabled:
+                    proxy.add_prompt(prompt_config.to_prompt())
+                    logger.info(f"Added prompt '{prompt_config.name}' for {user_config.email}")
+
     async def _mount_user_servers(self, mcp: FastMCP) -> None:
         """
         Import MCP servers for each user and mount them as proxy clients.
@@ -54,8 +77,18 @@ class MCPServerManager:
                     owner_email=str(user_config.email)
                 )
                 await client.__aenter__()
-                mcp.mount(FastMCP.as_proxy(client))
-                logger.info(f"Imported servers for {user_config.email}")
+                proxy = FastMCP.as_proxy(client)
+
+                # Mount or import based on configuration
+                mount_mode = self.config.mcp_composition_mode
+                if mount_mode == MountMode.LIVE:
+                    mcp.mount(proxy)
+                    logger.info(f"Mounted (live) servers for {user_config.email}")
+                elif mount_mode == MountMode.STATIC:
+                    await mcp.import_server(proxy)
+                    logger.info(f"Imported (static) servers for {user_config.email}")
+                else:
+                    raise ValueError(f"Unsupported mount mode: {mount_mode}")
             except Exception as e:
                 logger.error(f"Failed to import servers for {user_config.email}: {e}")
 
