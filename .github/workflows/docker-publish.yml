@@ -2,11 +2,11 @@ name: Build and Push Docker Image
 
 on:
   push:
-    tags:
-      - "**"
     branches:
       - main
       - 'feature/**'
+    tags:
+      - '*'
 
 env:
   REGISTRY: ghcr.io
@@ -33,22 +33,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=tag
-            type=match,pattern=feature/(.*),group=1,enable=${{ startsWith(github.ref, 'refs/heads/feature/') }}
+      - name: Determine Docker tag
+        id: docker-tag
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/heads/feature/* ]]; then
+            FEATURE_NAME=${GITHUB_REF#refs/heads/feature/}
+            echo "tag=$FEATURE_NAME" >> $GITHUB_OUTPUT
+          else
+            echo "tag=unknown" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.docker-tag.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
