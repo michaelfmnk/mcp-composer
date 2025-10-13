@@ -1,6 +1,7 @@
 """Application configuration management."""
 from enum import Enum
-from pydantic import Field
+from typing import Optional
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,6 +9,12 @@ class MountMode(str, Enum):
     """Downstream MCP server mount mode."""
     LIVE = "live"
     STATIC = "static"
+
+
+class AuthProviderType(str, Enum):
+    """Authentication provider type."""
+    GOOGLE = "google"
+    NONE = "none"
 
 
 class MongoConfig(BaseSettings):
@@ -50,9 +57,16 @@ class Config(BaseSettings):
 
     base_url: str = Field(alias="BASE_URL")
 
-    # Google OAuth configuration
-    google_client_id: str = Field(alias="GOOGLE_CLIENT_ID")
-    google_client_secret: str = Field(alias="GOOGLE_CLIENT_SECRET")
+    # Authentication configuration
+    auth_provider: AuthProviderType = Field(
+        default=AuthProviderType.GOOGLE,
+        alias="AUTH_PROVIDER",
+        description="Authentication provider: 'google' for Google OAuth, 'none' to disable auth"
+    )
+
+    # Google OAuth configuration (optional when auth_provider is 'none')
+    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
 
     # MCP server configuration
     mcp_host: str = Field(default="0.0.0.0", alias="MCP_HOST")
@@ -69,6 +83,21 @@ class Config(BaseSettings):
         alias="MCP_COMPOSITION_MODE",
         description="Composition mode for downstream MCP servers: 'live' uses mcp.mount(), 'static' uses mcp.import_server()"
     )
+
+    @field_validator("google_client_id", "google_client_secret")
+    @classmethod
+    def validate_google_credentials(cls, v, info):
+        """Validate that Google credentials are provided when auth_provider is GOOGLE."""
+        # Check if auth_provider field exists in values
+        auth_provider = info.data.get("auth_provider")
+
+        # If auth_provider is GOOGLE, credentials are required
+        if auth_provider == AuthProviderType.GOOGLE and v is None:
+            field_name = info.field_name
+            raise ValueError(
+                f"{field_name} is required when AUTH_PROVIDER is 'google'"
+            )
+        return v
 
     @property
     def google(self) -> GoogleOAuthConfig:

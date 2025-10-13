@@ -2,10 +2,12 @@
 import logging
 
 from fastmcp import FastMCP
+from fastmcp.prompts import Prompt
+from fastmcp.server.auth import AuthProvider
 
 from mcp_composer.auth.middleware import SecurityFilterMiddleware
 from mcp_composer.auth.providers import create_google_auth_provider
-from mcp_composer.config import MountMode
+from mcp_composer.config import AuthProviderType, MountMode
 from mcp_composer.server import CustomProxyClient
 
 logger = logging.getLogger(__name__)
@@ -34,9 +36,22 @@ class MCPServerManager:
         Returns:
             Configured FastMCP server instance
         """
-        auth_provider = create_google_auth_provider(self.config, self.clients_repository)
+
+        auth_provider_type = self.config.auth_provider
+        auth_provider: AuthProvider | None = None
+
+        if auth_provider_type == AuthProviderType.GOOGLE:
+            auth_provider = create_google_auth_provider(self.config, self.clients_repository)
+            logger.info("Google OAuth authentication enabled")
+        elif auth_provider_type == AuthProviderType.NONE:
+            logger.info("Authentication disabled")
+        else:
+            raise ValueError(f"Unsupported auth provider: {auth_provider_type}")
+
         mcp = FastMCP(name="Swarmnetics MCP", auth=auth_provider)
-        mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
+        if auth_provider_type != AuthProviderType.NONE:
+            mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
+
         return mcp
 
     def _attach_prompts_to_proxy(self, proxy: FastMCP, user_config) -> None:
