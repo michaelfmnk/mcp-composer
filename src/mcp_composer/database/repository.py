@@ -80,9 +80,12 @@ class UserConfigRepository:
         try:
             collection = self._get_collection()
             document = user_config.to_document()
+            update_fields = {"mcpServers": document["mcpServers"]}
+            if "prompts" in document:
+                update_fields["prompts"] = document["prompts"]
             await collection.update_one(
                 {"_id": document["_id"]},
-                {"$set": {"mcpServers": document["mcpServers"]}},
+                {"$set": update_fields},
                 upsert=True
             )
             logger.info(f"Updated configuration for user: {user_config.email}")

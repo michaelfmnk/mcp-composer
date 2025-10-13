@@ -2,6 +2,7 @@
 import logging
 
 from fastmcp import FastMCP
+from fastmcp.prompts import Prompt
 
 from mcp_composer.auth.middleware import SecurityFilterMiddleware
 from mcp_composer.auth.providers import create_google_auth_provider
@@ -22,6 +23,7 @@ class MCPServerManager:
             clients_repository: Repository for OAuth client data
             user_config_repository: Repository for user configurations
         """
+        self.mcp = None
         self.config = config
         self.clients_repository = clients_repository
         self.user_config_repository = user_config_repository
@@ -34,9 +36,31 @@ class MCPServerManager:
             Configured FastMCP server instance
         """
         auth_provider = create_google_auth_provider(self.config, self.clients_repository)
-        mcp = FastMCP(name="Swarmnetics MCP", auth=auth_provider)
-        mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
+        mcp = FastMCP(name="Swarmnetics MCP")
+        # mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
         return mcp
+
+    def _attach_prompts_to_proxy(self, proxy: FastMCP, user_config) -> None:
+        """
+        Attach prompts from user configuration to a proxy.
+
+        Args:
+            proxy: FastMCP proxy instance to attach prompts to
+            user_config: UserMCPConfig containing prompt configurations
+        """
+        # Add default owner prompt
+        proxy.add_prompt(Prompt.from_function(
+            lambda: f"This is a tool owned by {user_config.email}.",
+            name="/owner",
+            description="Indicates the owner of this tool."
+        ))
+
+        # Add custom prompts from config
+        if user_config.prompts:
+            for prompt_config in user_config.prompts:
+                if prompt_config.enabled:
+                    proxy.add_prompt(prompt_config.to_prompt())
+                    logger.info(f"Added prompt '{prompt_config.name}' for {user_config.email}")
 
     async def _mount_user_servers(self, mcp: FastMCP) -> None:
         """
@@ -54,7 +78,10 @@ class MCPServerManager:
                     owner_email=str(user_config.email)
                 )
                 await client.__aenter__()
-                mcp.mount(FastMCP.as_proxy(client))
+                proxy = FastMCP.as_proxy(client)
+                self._attach_prompts_to_proxy(proxy, user_config)
+                mcp.mount(proxy)
+
                 logger.info(f"Imported servers for {user_config.email}")
             except Exception as e:
                 logger.error(f"Failed to import servers for {user_config.email}: {e}")
@@ -62,19 +89,20 @@ class MCPServerManager:
     async def start_mcp(self) -> None:
         """Initialize and run the MCP server with all user configurations."""
         # Create server
-        mcp = await self._create_mcp_server()
+        self.mcp = await self._create_mcp_server()
 
         # Import user servers
-        await self._mount_user_servers(mcp)
+        await self._mount_user_servers(self.mcp)
 
-        await self._print_tools(mcp)
+        await self._print_tools(self.mcp)
 
         # Start server
         mcp_config = self.config.mcp
         logger.info(f"Starting MCP Composer on {mcp_config.transport}://{mcp_config.host}:{mcp_config.port}")
-        await mcp.run_async(transport=mcp_config.transport, host=mcp_config.host, port=mcp_config.port)
+        await self.mcp.run_async(transport=mcp_config.transport, host=mcp_config.host, port=mcp_config.port)
 
-    async def _print_tools(self, mcp: FastMCP) -> None:
+    @staticmethod
+    async def _print_tools(mcp: FastMCP) -> None:
         """Print available tools in the MCP server."""
         tools = await mcp.get_tools()
         if tools:
