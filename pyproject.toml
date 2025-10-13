@@ -16,4 +16,4 @@ requires = ["uv_build>=0.8.22,<0.9.0"]
 build-backend = "uv_build"
 
 [project.scripts]
-mcp-composer = "mcp_composer.main:main"
+start = "mcp_composer.main:main"
