@@ -46,9 +46,9 @@ Key components:
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.14+
 - MongoDB instance
-- Google OAuth credentials ([setup guide](https://console.cloud.google.com/))
+- Google OAuth credentials ([setup guide](https://console.cloud.google.com/)) - in case using Google OAuth
 
 ### Local Development
 
@@ -77,6 +77,63 @@ uv run mcp-composer
 
 The server will start on `http://localhost:8000`.
 
+#### Docker Compose Setup
+
+Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  mcp-composer:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - BASE_URL=http://localhost:8000
+      - MONGODB_URI=mongodb://mongodb:27017
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_TRANSPORT=http
+      - MONGODB_DATABASE=mcp_composer
+      - AUTH_PROVIDER=google  # or "none" to disable auth
+      - MCP_COMPOSITION_MODE=live  # or "static"
+    depends_on:
+      - mongodb
+    networks:
+      - mcp-network
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - mcp-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  mcp-network:
+```
+
+#### Building the Docker Image
+
+```bash
+# Build the image
+docker build -t mcp-composer .
+
+# Run manually (requires MongoDB running separately)
+docker run -p 8000:8000 \
+  -e GOOGLE_CLIENT_ID=your_client_id \
+  -e GOOGLE_CLIENT_SECRET=your_client_secret \
+  -e BASE_URL=http://localhost:8000 \
+  -e MONGODB_URI=mongodb://host.docker.internal:27017 \
+  mcp-composer
+```
+
 ## Configuration
 
 ### User MCP Server Configuration
@@ -87,19 +144,33 @@ User configurations are stored in MongoDB with the following structure:
 {
   "_id": "user@example.com",
   "mcpServers": {
-    "my-server": {
-      "url": "https://example.com/mcp" 
+    "http-server": {
+      "url": "https://example.com/mcp"
     },
-    "local-tool": {
-      "command": "npx",                  
+    "stdio-server": {
+      "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem"],
       "env": {
         "ALLOWED_PATHS": "/home/user/documents"
       }
     }
-  }
+  },
+  "prompts": [
+    {
+      "name": "/custom-prompt",
+      "message": "Your prompt content here",
+      "title": "Custom Prompt",
+      "description": "Description of what this prompt provides",
+      "enabled": true
+    }
+  ]
 }
 ```
+
+**MCP Server Configuration Options:**
+- **HTTP-based servers**: Use `url` field pointing to the MCP server endpoint
+- **stdio-based servers**: Use `command`, `args`, and optional `env` fields
+- **Prompts**: Optional array of custom prompts to attach to the user's MCP servers
 
 ### Environment Variables
 
@@ -110,27 +181,98 @@ Required:
 - `MONGODB_URI` - MongoDB connection string
 
 Optional:
+- `AUTH_PROVIDER` - Authentication provider: "google" or "none" (default: "google")
 - `MCP_HOST` - Server host address (default: "0.0.0.0")
 - `MCP_PORT` - Server port (default: 8000)
 - `MCP_TRANSPORT` - Transport protocol: "stdio", "http", "sse", or "streamable-http" (default: "http")
 - `MONGODB_DATABASE` - Database name (default: "mcp_composer")
+- `MCP_COMPOSITION_MODE` - Composition mode: "live" or "static" (default: "live")
+  - `live`: Uses `mcp.mount()` for dynamic mounting, preserves full proxy behavior
+  - `static`: Uses `mcp.import_server()` for static import, better for performance
 
-## Usage with Claude.AI
+## Usage
 
-1. Start the MCP Composer server
-2. Provide Claude.AI with your MCP Composer endpoint
-3. Authenticate with Google OAuth (you might need to refresh the page)
-4. Now you should be able to see your configured tools
+### With Claude.AI
+
+1. Start the MCP Composer server (locally or via Docker)
+2. Add your MCP Composer endpoint to Claude.AI's MCP settings
+3. Authenticate with Google OAuth when prompted (you might need to refresh the page)
+4. Your configured tools, prompts, and resources will now be available in Claude.AI
 
 Each user's tools are isolated and only visible to them after authentication.
 
+### Managing User Configurations
+
+User configurations are stored in MongoDB. You can add or update configurations directly in the database:
+
+```bash
+# Connect to MongoDB
+mongosh mongodb://localhost:27017/mcp_composer
+
+# Insert or update a user configuration
+db.mcp_configs.updateOne(
+  { "_id": "user@example.com" },
+  {
+    "$set": {
+      "mcpServers": {
+        "my-server": {
+          "url": "https://example.com/mcp"
+        }
+      }
+    }
+  },
+  { upsert: true }
+)
+
+# View all configurations
+db.mcp_configs.find().pretty()
+```
+
 ## Security Considerations
 
-- OAuth tokens are stored in MongoDB
-- Tools are filtered per user through middleware
-- Each user can only see their own configured MCP servers
+- OAuth tokens are stored in MongoDB (in `mcp_clients` collection)
+- Tools, prompts, and resources are filtered per user through `SecurityFilterMiddleware`
+- Each user can only see their own configured MCP servers based on JWT email claim
+- Custom prompts are user-specific and filtered alongside tools
 
-**Note**: ⚠️ The current middleware is designed for segregation and development purposes.
+**Important**: ⚠️ The current middleware implementation is designed for tool segregation and development purposes. For production use, consider:
+- Implementing additional security layers (rate limiting, request validation, etc.)
+- Using encrypted connections for MongoDB
+- Securing the OAuth callback endpoint
+- Implementing proper logging and monitoring
+- Setting up HTTPS/TLS for the MCP endpoint
+
+## Development
+
+### Project Structure
+
+```
+src/mcp_composer/
+├── auth/
+│   ├── middleware.py       # SecurityFilterMiddleware for tool filtering
+│   └── providers.py        # Google OAuth provider configuration
+├── database/
+│   ├── client.py           # MongoDB client wrapper
+│   ├── repository.py       # User configuration repository
+│   ├── clients_repository.py # OAuth client data repository
+│   └── storage.py          # Storage adapter for FastMCP
+├── server/
+│   ├── manager.py          # MCP server lifecycle management
+│   └── proxy_client.py     # Custom proxy client with owner tracking
+├── app.py                  # Main application class
+├── config.py               # Configuration models
+├── models.py               # Pydantic data models
+└── main.py                 # Entry point
+```
+
+### Adding Features
+
+When extending MCP Composer:
+- Follow the dependency injection pattern - no global state
+- Use repositories for all database access
+- Add new middleware by extending `Middleware` from FastMCP
+- Keep authentication and authorization separate
+- Update `UserMCPConfig` model for new configuration options
 
 ## License
 
