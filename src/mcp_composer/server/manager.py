@@ -5,13 +5,13 @@ from fastmcp import FastMCP
 from fastmcp.server.auth import AuthProvider
 from fastmcp.server.auth import OAuthProxy
 from mcp.server.auth.provider import AccessToken, RefreshToken
-from mcp_composer.database.tokens_repository import TokensRepository
 
 from mcp_composer.auth.middleware import SecurityFilterMiddleware
 from mcp_composer.auth.providers import create_google_auth_provider
 from mcp_composer.config import AuthProviderType, MountMode
 from mcp_composer.config import Config
-from mcp_composer.database import ClientsRepository, UserConfigRepository
+from mcp_composer.database import UserConfigRepository, MongoDBClient
+from mcp_composer.database.tokens_repository import TokensRepository
 from mcp_composer.models import OAuthToken, TokenType
 from mcp_composer.server import CustomProxyClient
 
@@ -23,21 +23,21 @@ class MCPServerManager:
 
     def __init__(self,
                  config: Config,
+                 db_client: MongoDBClient,
                  tokens_repository: TokensRepository,
-                 clients_repository: ClientsRepository,
                  user_config_repository: UserConfigRepository):
         """
         Initialize server manager with dependencies.
 
         Args:
             config: Application configuration
+            db_client: MongoDB client instance
             tokens_repository: Repository for OAuth tokens
-            clients_repository: Repository for OAuth client data
             user_config_repository: Repository for user configurations
         """
         self.mcp: FastMCP | None = None
         self.config: Config = config
-        self.clients_repository = clients_repository
+        self.db_client = db_client
         self.user_config_repository = user_config_repository
         self.tokens_repository = tokens_repository
 
@@ -53,14 +53,21 @@ class MCPServerManager:
         auth_provider: AuthProvider | None = None
 
         if auth_provider_type == AuthProviderType.GOOGLE:
-            auth_provider = create_google_auth_provider(self.config, self.clients_repository)
+            auth_provider = await create_google_auth_provider(
+                config=self.config,
+                db_client=self.db_client.client,
+            )
             logger.info("Google OAuth authentication enabled")
         elif auth_provider_type == AuthProviderType.NONE:
             logger.info("Authentication disabled")
         else:
             raise ValueError(f"Unsupported auth provider: {auth_provider_type}")
 
-        mcp = FastMCP(name="Swarmnetics MCP", auth=auth_provider)
+        mcp = FastMCP(
+            name="Swarmnetics MCP",
+            auth=auth_provider,
+            stateless_http=True
+        )
         if auth_provider_type != AuthProviderType.NONE:
             mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
 

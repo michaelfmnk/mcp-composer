@@ -1,8 +1,9 @@
 """MongoDB client connection management."""
 import logging
-from typing import Optional
+from typing import Optional, Any
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
 
 from mcp_composer.config import MongoConfig
 
@@ -20,13 +21,13 @@ class MongoDBClient:
             mongo_config: MongoDB configuration
         """
         self.config = mongo_config
-        self.client: Optional[AsyncIOMotorClient] = None
-        self.db: Optional[AsyncIOMotorDatabase] = None
+        self.client: Optional[AsyncMongoClient[dict[str, Any]]] = None
+        self.db: Optional[AsyncDatabase[dict[str, Any]]] = None
 
     async def connect(self):
         """Establish connection to MongoDB."""
         try:
-            self.client = AsyncIOMotorClient(self.config.connection_string)
+            self.client = AsyncMongoClient(self.config.connection_string)
             self.db = self.client[self.config.database_name]
             # Test connection
             await self.client.admin.command('ping')
@@ -38,7 +39,7 @@ class MongoDBClient:
     async def close(self):
         """Close MongoDB connection."""
         if self.client:
-            self.client.close()
+            await self.client.close()
             logger.info("MongoDB connection closed")
 
     def get_collection(self, collection_name: str):

@@ -1,10 +1,11 @@
 """Main application class for MCP Composer."""
 import logging
 
+from pymongo.asynchronous.mongo_client import AsyncMongoClient
+
 from mcp_composer.config import Config
 from mcp_composer.database.client import MongoDBClient
 from mcp_composer.database.repository import UserConfigRepository
-from mcp_composer.database.clients_repository import ClientsRepository
 from mcp_composer.database.tokens_repository import TokensRepository
 from mcp_composer.server.manager import MCPServerManager
 
@@ -31,13 +32,12 @@ class McpComposerApp:
         # Initialize database components
         self.db_client = MongoDBClient(config.mongo)
         self.user_config_repository = UserConfigRepository(self.db_client)
-        self.clients_repository = ClientsRepository(self.db_client)
         self.tokens_repository = TokensRepository(self.db_client)
 
         # Initialize server components
         self.server_manager = MCPServerManager(
             config=self.config,
-            clients_repository=self.clients_repository,
+            db_client=self.db_client,
             user_config_repository=self.user_config_repository,
             tokens_repository=self.tokens_repository
         )
