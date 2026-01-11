@@ -60,7 +60,7 @@ class MCPServerManager:
         else:
             raise ValueError(f"Unsupported auth provider: {auth_provider_type}")
 
-        mcp = FastMCP(name="Swarmnetics MCP", auth=auth_provider)
+        mcp = FastMCP(name="Swarmnetics MCP", auth=auth_provider, stateless_http=True)
         if auth_provider_type != AuthProviderType.NONE:
             mcp.add_middleware(SecurityFilterMiddleware(self.user_config_repository))
 
