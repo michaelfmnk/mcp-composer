@@ -12,14 +12,26 @@ logger = logging.getLogger(__name__)
 
 # not for production. for tool segregation purposes only
 class SecurityFilterMiddleware(Middleware):
-    """Middleware that filters tools based on authenticated user's ownership."""
+    """
+    Middleware that filters MCP resources based on authenticated user's ownership.
+
+    This middleware intercepts list requests for tools, prompts, and resources,
+    filtering them to only return items owned by the currently authenticated user.
+    Ownership is determined by checking the owner_email attribute on proxy clients
+    or by matching tool tags against the user's email.
+
+    Note:
+        This middleware is intended for development and tool segregation purposes.
+        Additional security measures may be needed for production deployments.
+    """
 
     def __init__(self, user_config_repository):
         """
         Initialize middleware with user config repository.
 
         Args:
-            user_config_repository: Repository for accessing user configurations
+            user_config_repository: Repository for validating user authorization
+                and accessing user MCP configurations.
         """
         super().__init__()
         self.user_config_repository = user_config_repository
@@ -53,12 +65,10 @@ class SecurityFilterMiddleware(Middleware):
                 message="User is not authorized to access this MCP.",
             ))
 
-        tools = await call_next(context)
+        tools: list[Tool] = await call_next(context)
         filtered_tools = []
         for tool in tools:
-            owner_email = tool._client.owner_email
-            logger.debug(f"Tool {tool.name} owned by {owner_email}")
-            if owner_email == email:
+            if email in tool.tags:
                 filtered_tools.append(tool)
 
         logger.info(f"Filtered {len(filtered_tools)}/{len(tools)} tools for {email}")

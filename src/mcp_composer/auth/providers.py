@@ -1,28 +1,33 @@
 """OAuth authentication providers."""
 from fastmcp.server.auth.providers.google import GoogleProvider
+from key_value.aio.protocols import AsyncKeyValue
 
-from mcp_composer.config import Config
-from mcp_composer.database.storage import MongoClientStorage
+from mcp_composer.config import GoogleOAuthConfig
 
 
-def create_google_auth_provider(config: Config, clients_repository) -> GoogleProvider:
+def create_google_auth_provider(
+        base_url: str,
+        config: GoogleOAuthConfig,
+        client_storage: AsyncKeyValue | None = None,
+) -> GoogleProvider:
     """
     Create and configure Google OAuth provider.
 
     Args:
-        config: Application configuration
-        clients_repository: ClientsRepository instance for OAuth token storage
+        base_url: Base URL for OAuth callbacks (e.g., 'http://localhost:8000').
+        config: Google OAuth configuration containing client_id and client_secret.
+        client_storage: Optional async key-value store for persisting OAuth client data.
 
     Returns:
-        Configured GoogleProvider instance
+        Configured GoogleProvider instance with offline access and consent prompt.
     """
-    google_config = config.google
     provider = GoogleProvider(
-        client_id=google_config.client_id,
-        client_secret=google_config.client_secret,
-        base_url=config.base_url,
+        client_id=config.client_id,
+        client_secret=config.client_secret,
+        base_url=base_url,
         required_scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", ],
-        client_storage=MongoClientStorage(clients_repository)
+        client_storage=client_storage,
+        require_authorization_consent=False
     )
     provider._extra_authorize_params = {
         "access_type": "offline",

@@ -1,14 +1,10 @@
 """Application configuration management."""
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
+
+from fastmcp.server.server import Transport
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class MountMode(str, Enum):
-    """Downstream MCP server mount mode."""
-    LIVE = "live"
-    STATIC = "static"
 
 
 class AuthProviderType(str, Enum):
@@ -18,7 +14,13 @@ class AuthProviderType(str, Enum):
 
 
 class MongoConfig(BaseSettings):
-    """MongoDB connection configuration."""
+    """
+    MongoDB connection configuration.
+
+    Attributes:
+        connection_string: MongoDB connection URI (e.g., 'mongodb://localhost:27017').
+        database_name: Name of the database to use for storing MCP configurations.
+    """
 
     model_config = SettingsConfigDict(env_prefix="MONGODB_")
 
@@ -27,7 +29,13 @@ class MongoConfig(BaseSettings):
 
 
 class GoogleOAuthConfig(BaseSettings):
-    """Google OAuth configuration."""
+    """
+    Google OAuth configuration for authentication.
+
+    Attributes:
+        client_id: Google OAuth 2.0 client ID from Google Cloud Console.
+        client_secret: Google OAuth 2.0 client secret from Google Cloud Console.
+    """
 
     model_config = SettingsConfigDict(env_prefix="GOOGLE_")
 
@@ -36,17 +44,40 @@ class GoogleOAuthConfig(BaseSettings):
 
 
 class MCPServerConfig(BaseSettings):
-    """MCP server configuration."""
+    """
+    MCP server configuration for network binding.
+
+    Attributes:
+        host: Host address to bind the server to (default: '0.0.0.0').
+        port: Port number to listen on (default: 8000).
+        transport: Transport protocol type (options: 'stdio', 'http', 'sse', 'streamable-http').
+    """
 
     model_config = SettingsConfigDict(env_prefix="MCP_")
 
     host: str = Field(default="0.0.0.0")
     port: int = Field(default=8000)
-    transport: str = Field(default="http")
+    transport: Transport = Field(default="http")
 
 
 class Config(BaseSettings):
-    """Application configuration loaded from environment variables."""
+    """
+    Main application configuration loaded from environment variables.
+
+    This class aggregates all configuration settings and provides nested config
+    objects via properties for Google OAuth, MCP server, and MongoDB settings.
+
+    Attributes:
+        base_url: Base URL for the application (used for OAuth callbacks).
+        auth_provider: Authentication provider type ('google' or 'none').
+        google_client_id: Google OAuth client ID (required when auth_provider is 'google').
+        google_client_secret: Google OAuth client secret (required when auth_provider is 'google').
+        mcp_host: Host address for the MCP server.
+        mcp_port: Port number for the MCP server.
+        mcp_transport: Transport protocol for MCP communication.
+        mongodb_uri: MongoDB connection URI.
+        mongodb_database: MongoDB database name.
+    """
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -76,13 +107,6 @@ class Config(BaseSettings):
     # MongoDB configuration
     mongodb_uri: str = Field(alias="MONGODB_URI")
     mongodb_database: str = Field(default="mcp_composer", alias="MONGODB_DATABASE")
-
-    # MCP composition mode
-    mcp_composition_mode: MountMode = Field(
-        default=MountMode.LIVE,
-        alias="MCP_COMPOSITION_MODE",
-        description="Composition mode for downstream MCP servers: 'live' uses mcp.mount(), 'static' uses mcp.import_server()"
-    )
 
     @field_validator("google_client_id", "google_client_secret")
     @classmethod
